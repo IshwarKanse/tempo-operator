@@ -4,6 +4,7 @@ kind: Test
 metadata:
   name: multitenancy-rbac
 spec:
+  concurrent: false
   namespace: chainsaw-rbac
   steps:
   - name: step-00
