@@ -5,6 +5,7 @@ metadata:
   creationTimestamp: null
   name: multitenancy
 spec:
+  concurrent: false
   namespace: chainsaw-multitenancy
   steps:
   - name: step-00
