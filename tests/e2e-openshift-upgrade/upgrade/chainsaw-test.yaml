@@ -163,6 +163,10 @@ spec:
         namespace: openshift-tempo-operator
         name: tempo-product
         format: yaml
+  - name: Wait for the upgrade to complete specifically when upgrading to a minor version when the operator and operadn version doesn't change.
+    try:
+      - sleep:
+          duration: 60s
   - name: Assert TempoStack is ready
     try:
     - assert:
