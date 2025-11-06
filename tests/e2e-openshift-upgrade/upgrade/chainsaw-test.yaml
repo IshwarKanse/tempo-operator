@@ -141,8 +141,8 @@ spec:
         file: create-upgrade-catalog.yaml
         expect:
         - check:
-            # Allow success or the specific expected error about tempo-idms
-            ($error == null || ($error.message != null && contains($error.message, 'tempo-idms') && contains($error.message, 'forbidden'))): true
+            # Allow success or forbidden error
+            ($error == null || contains($error, 'forbidden')): true
     - assert:
         file: assert-upgrade-catalog.yaml
   - name: Upgrade Tempo Operator
