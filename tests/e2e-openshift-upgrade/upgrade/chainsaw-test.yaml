@@ -142,7 +142,7 @@ spec:
         expect:
         - check:
             # Allow success or the specific expected error
-            ($error == null || contains($error.message, 'imagedigestmirrorsets.config.openshift.io "tempo-idms" is forbidden')): true
+            ($error == null || ($error.message != null && contains($error.message, 'imagedigestmirrorsets.config.openshift.io "tempo-idms" is forbidden'))): true
     - assert:
         file: assert-upgrade-catalog.yaml
   - name: Upgrade Tempo Operator
