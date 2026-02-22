@@ -23,10 +23,10 @@ chainsaw test --test-dir ./tests/e2e/compatibility
 
 # Run with custom values (for upgrade tests)
 chainsaw test --config .chainsaw-openshift.yaml tests/e2e-openshift-upgrade --values - <<EOF
-upgrade_fbc_image: brew.registry.redhat.io/rh-osbs/iib:988093
-upgrade_operator_version: 0.16.0
-upgrade_tempo_version: 2.7.2
-upgrade_operator_csv_name: tempo-operator.v0.16.0-1
+upgrade_fbc_image: brew.registry.redhat.io/rh-osbs/iib:1106846
+upgrade_operator_version: 0.20.0
+upgrade_tempo_version: 2.10.0
+upgrade_operator_csv_name: tempo-operator.v0.20.0-1
 EOF
 ```
 
