@@ -636,6 +636,8 @@ spec:
     ports:
     - port: 8080
       protocol: TCP
+    - port: 8081
+      protocol: TCP
     - port: 8090
       protocol: TCP
   podSelector:
@@ -660,6 +662,27 @@ metadata:
   name: tempo-simplest-distributor
   namespace: chainsaw-multitenancy
 spec:
+  egress:
+  - ports:
+    - port: 9095
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: ingester
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - ports:
+    - port: 3200
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: ingester
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
   ingress:
   - from:
     - podSelector:
@@ -683,7 +706,7 @@ spec:
   - Egress
   - Ingress
 ---
-# Ingester network policy - storage egress without port restrictions
+# Ingester network policy
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -700,6 +723,31 @@ spec:
     - ipBlock:
         cidr: 0.0.0.0/0
     - namespaceSelector: {}
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: distributor
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+    ports:
+    - port: 9095
+      protocol: TCP
+    - port: 3200
+      protocol: TCP
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: querier
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+    ports:
+    - port: 9095
+      protocol: TCP
+    - port: 3200
+      protocol: TCP
   podSelector:
     matchLabels:
       app.kubernetes.io/component: ingester
@@ -710,7 +758,7 @@ spec:
   - Egress
   - Ingress
 ---
-# Querier network policy - storage egress without port restrictions
+# Querier network policy
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -722,6 +770,64 @@ metadata:
   name: tempo-simplest-querier
   namespace: chainsaw-multitenancy
 spec:
+  egress:
+  - ports:
+    - port: 9095
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: ingester
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - ports:
+    - port: 3200
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: ingester
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - ports:
+    - port: 9095
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: query-frontend
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - ports:
+    - port: 3200
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: query-frontend
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    - namespaceSelector: {}
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: query-frontend
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+    ports:
+    - port: 9095
+      protocol: TCP
+    - port: 3200
+      protocol: TCP
   podSelector:
     matchLabels:
       app.kubernetes.io/component: querier
@@ -732,7 +838,7 @@ spec:
   - Egress
   - Ingress
 ---
-# Query-frontend network policy - storage egress without port restrictions
+# Query-frontend network policy
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -744,6 +850,72 @@ metadata:
   name: tempo-simplest-query-frontend
   namespace: chainsaw-multitenancy
 spec:
+  egress:
+  - ports:
+    - port: 9095
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: querier
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - ports:
+    - port: 3200
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: querier
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    - namespaceSelector: {}
+  ingress:
+  # Cluster components access to Jaeger ports
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - port: 16685
+      protocol: TCP
+    - port: 16686
+      protocol: TCP
+    - port: 16687
+      protocol: TCP
+  # Gateway access to query-frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: gateway
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+    ports:
+    - port: 9095
+      protocol: TCP
+    - port: 3200
+      protocol: TCP
+    - port: 16686
+      protocol: TCP
+    - port: 16687
+      protocol: TCP
+  # Querier access to query-frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: querier
+          app.kubernetes.io/instance: simplest
+          app.kubernetes.io/managed-by: tempo-operator
+          app.kubernetes.io/name: tempo
+    ports:
+    - port: 9095
+      protocol: TCP
+    - port: 3200
+      protocol: TCP
   podSelector:
     matchLabels:
       app.kubernetes.io/component: query-frontend
