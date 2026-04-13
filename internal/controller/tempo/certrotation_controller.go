@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -14,7 +15,6 @@ import (
 	"github.com/grafana/tempo-operator/api/tempo/v1alpha1"
 	"github.com/grafana/tempo-operator/internal/certrotation"
 	"github.com/grafana/tempo-operator/internal/certrotation/handlers"
-	tempoStackState "github.com/grafana/tempo-operator/internal/controller/tempo/internal/management/state"
 )
 
 // CertRotationReconciler reconciles the `tempo.grafana.com/certRotationRequiredAt` annotation on
@@ -40,11 +40,21 @@ func (r *CertRotationReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	log.V(1).Info("starting reconcile loop")
 	defer log.V(1).Info("finished reconcile loop")
 
-	managed, err := tempoStackState.IsManaged(ctx, req, r.Client)
-	if err != nil {
+	var tempoStack v1alpha1.TempoStack
+	if err := r.Get(ctx, req.NamespacedName, &tempoStack); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, err
 	}
-	if !managed {
+
+	// Skip cert rotation if the resource is being deleted to avoid
+	// conflicts with the foregroundDeletion finalizer.
+	if tempoStack.GetDeletionTimestamp() != nil {
+		return ctrl.Result{}, nil
+	}
+
+	if tempoStack.Spec.ManagementState != v1alpha1.ManagementStateManaged {
 		log.Info("Skipping reconciliation for unmanaged TempoStack resource", "name", req.String())
 		// Stop requeueing for unmanaged TempoStack custom resources
 		return ctrl.Result{}, nil

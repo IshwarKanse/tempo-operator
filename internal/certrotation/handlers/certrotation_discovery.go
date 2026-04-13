@@ -30,6 +30,12 @@ func AnnotateTempoStackForRequiredCertRotation(ctx context.Context, k client.Cli
 		return kverrors.Wrap(err, "failed to get tempo TempoStack", "key", key)
 	}
 
+	// Skip annotation update if the resource is being deleted to avoid
+	// conflicts with the foregroundDeletion finalizer.
+	if s.GetDeletionTimestamp() != nil {
+		return nil
+	}
+
 	ss := s.DeepCopy()
 	if ss.Annotations == nil {
 		ss.Annotations = make(map[string]string)
@@ -58,6 +64,12 @@ func AnnotateMonolithicForRequiredCertRotation(ctx context.Context, k client.Cli
 		}
 
 		return kverrors.Wrap(err, "failed to get tempo TempoStack", "key", key)
+	}
+
+	// Skip annotation update if the resource is being deleted to avoid
+	// conflicts with the foregroundDeletion finalizer.
+	if s.GetDeletionTimestamp() != nil {
+		return nil
 	}
 
 	ss := s.DeepCopy()

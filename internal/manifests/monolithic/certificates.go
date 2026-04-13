@@ -39,6 +39,13 @@ func CreateOrRotateCertificates(ctx context.Context, log logr.Logger,
 		return kverrors.Wrap(err, "failed to lookup tempomonolithic", "name", req.String())
 	}
 
+	// Skip certificate operations if the resource is being deleted to avoid
+	// conflicts with the foregroundDeletion finalizer.
+	if stack.GetDeletionTimestamp() != nil {
+		ll.V(1).Info("skipping certificate rotation for tempomonolithic being deleted", "name", req.String())
+		return nil
+	}
+
 	opts, err := handlers.GetOptions(ctx, k, req, cs)
 	if err != nil {
 		return kverrors.Wrap(err, "failed to lookup certificates secrets", "name", req.String())
