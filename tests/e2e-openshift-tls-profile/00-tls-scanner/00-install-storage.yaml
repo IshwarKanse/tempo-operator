@@ -1,22 +1,7 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  labels:
-    app.kubernetes.io/name: minio
-  name: minio
-  namespace: chainsaw-tls-mono-st
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: minio
-  namespace: chainsaw-tls-mono-st
 spec:
   selector:
     matchLabels:
@@ -34,7 +19,7 @@ spec:
             - -c
             - |
               mkdir -p /storage/tempo && \
-              minio server /storage
+              exec minio server /storage
           env:
             - name: MINIO_ACCESS_KEY
               value: tempo
@@ -49,14 +34,12 @@ spec:
               name: storage
       volumes:
         - name: storage
-          persistentVolumeClaim:
-            claimName: minio
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: minio
-  namespace: chainsaw-tls-mono-st
 spec:
   ports:
     - port: 9000
@@ -69,8 +52,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: minio
-  namespace: chainsaw-tls-mono-st
+   name: minio
 stringData:
   endpoint: http://minio:9000
   bucket: tempo
