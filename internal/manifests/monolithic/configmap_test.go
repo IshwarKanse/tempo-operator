@@ -327,6 +327,7 @@ usage_report:
 			opts: Options{
 				TLSProfile: tlsprofile.TLSProfileOptions{
 					MinTLSVersion: "VersionTLS12",
+					Groups:        []string{"X25519MLKEM768", "secp256r1"},
 					Ciphers:       []string{"abc"},
 				},
 			},
@@ -357,6 +358,7 @@ distributor:
             key_file: /var/run/tls/receiver/grpc/tls.key
             min_version: "1.2"
             cipher_suites: [abc]
+            curve_preferences: [X25519MLKEM768, P256]
 usage_report:
   reporting_enabled: false
 `,
@@ -442,6 +444,111 @@ storage:
       overlay_setting: abc
     local:
       path: /var/tempo/blocks
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+usage_report:
+  reporting_enabled: false
+`,
+		},
+		{
+			name: "S3 storage with short lived credentials",
+			spec: v1alpha1.TempoMonolithicSpec{
+				Storage: &v1alpha1.MonolithicStorageSpec{
+					Traces: v1alpha1.MonolithicTracesStorageSpec{
+						Backend: v1alpha1.MonolithicTracesStorageBackendS3,
+						S3: &v1alpha1.MonolithicTracesStorageS3Spec{
+							CredentialMode: v1alpha1.CredentialModeToken,
+						},
+					},
+				},
+			},
+			opts: Options{
+				StorageParams: manifestutils.StorageParams{
+					CredentialMode: v1alpha1.CredentialModeToken,
+					S3: &manifestutils.S3{
+						Endpoint: "s3.us-east-2.amazonaws.com",
+						Bucket:   "tempo",
+						Region:   "us-east-2",
+					},
+				},
+			},
+			expected: `
+server:
+  http_listen_port: 3200
+  http_server_read_timeout: 30s
+  http_server_write_timeout: 30s
+internal_server:
+  enable: true
+  http_listen_address: 0.0.0.0
+storage:
+  trace:
+    backend: s3
+    wal:
+      path: /var/tempo/wal
+    s3:
+      endpoint: s3.us-east-2.amazonaws.com
+      bucket: tempo
+      insecure: false
+      region: us-east-2
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+usage_report:
+  reporting_enabled: false
+`,
+		},
+		{
+			name: "S3 storage with short lived credentials in the ISO partition",
+			spec: v1alpha1.TempoMonolithicSpec{
+				Storage: &v1alpha1.MonolithicStorageSpec{
+					Traces: v1alpha1.MonolithicTracesStorageSpec{
+						Backend: v1alpha1.MonolithicTracesStorageBackendS3,
+						S3: &v1alpha1.MonolithicTracesStorageS3Spec{
+							CredentialMode: v1alpha1.CredentialModeTokenCCO,
+						},
+					},
+				},
+			},
+			opts: Options{
+				StorageParams: manifestutils.StorageParams{
+					CredentialMode: v1alpha1.CredentialModeTokenCCO,
+					S3: &manifestutils.S3{
+						Endpoint: "s3.us-iso-east-1.c2s.ic.gov",
+						Bucket:   "tempo",
+						Region:   "us-iso-east-1",
+						Insecure: true,
+					},
+				},
+			},
+			expected: `
+server:
+  http_listen_port: 3200
+  http_server_read_timeout: 30s
+  http_server_write_timeout: 30s
+internal_server:
+  enable: true
+  http_listen_address: 0.0.0.0
+storage:
+  trace:
+    backend: s3
+    wal:
+      path: /var/tempo/wal
+    s3:
+      endpoint: s3.us-iso-east-1.c2s.ic.gov
+      bucket: tempo
+      insecure: true
+      region: us-iso-east-1
 distributor:
   receivers:
     otlp:
@@ -572,6 +679,9 @@ usage_report:
 				},
 			},
 			opts: Options{
+				TLSProfile: tlsprofile.TLSProfileOptions{
+					Groups: []string{"X25519MLKEM768", "secp256r1", "X25519"},
+				},
 				CtrlConfig: configv1alpha1.ProjectConfig{
 					Gates: configv1alpha1.FeatureGates{
 						HTTPEncryption: true,
@@ -612,8 +722,10 @@ distributor:
             client_ca_file: /var/run/ca/service-ca.crt
             key_file: /var/run/tls/server/tls.key
             min_version: "1.3"
+            curve_preferences: [X25519MLKEM768, P256, X25519]
         grpc:
           tls:
+            curve_preferences: [X25519MLKEM768, P256, X25519]
             cert_file: /var/run/tls/server/tls.crt
             client_ca_file: /var/run/ca/service-ca.crt
             key_file: /var/run/tls/server/tls.key
@@ -639,4 +751,81 @@ usage_report:
 			require.YAMLEq(t, test.expected, string(cfg))
 		})
 	}
+}
+
+func TestBuildTempoConfigTempoTLSCurvePreferences(t *testing.T) {
+	opts := Options{
+		CtrlConfig: configv1alpha1.ProjectConfig{
+			Gates: configv1alpha1.FeatureGates{
+				HTTPEncryption: true,
+				Tempo:          configv1alpha1.TempoFeatureGates{TLSCurvePreferences: true},
+			},
+		},
+		Tempo: v1alpha1.TempoMonolithic{
+			Spec: v1alpha1.TempoMonolithicSpec{
+				Multitenancy: &v1alpha1.MonolithicMultitenancySpec{
+					Enabled: true,
+					TenantsSpec: v1alpha1.TenantsSpec{
+						Mode:           v1alpha1.ModeOpenShift,
+						Authentication: []v1alpha1.AuthenticationSpec{{TenantName: "dev", TenantID: "abc"}},
+					},
+				},
+			},
+		},
+		TLSProfile: tlsprofile.TLSProfileOptions{
+			MinTLSVersion: "VersionTLS12",
+			Groups:        []string{"X25519MLKEM768", "secp256r1", "X25519"},
+		},
+	}
+	opts.Tempo.Default(opts.CtrlConfig)
+	cfg, err := buildTempoConfig(opts)
+	require.NoError(t, err)
+
+	require.YAMLEq(t, `
+multitenancy_enabled: true
+server:
+  http_listen_address: 0.0.0.0
+  http_listen_port: 3200
+  grpc_listen_address: localhost
+  http_server_read_timeout: 30s
+  http_server_write_timeout: 30s
+  tls_min_version: VersionTLS12
+  tls_curve_preferences: X25519MLKEM768,CurveP256,X25519
+  http_tls_config:
+    cert_file: /var/run/tls/server/tls.crt
+    key_file: /var/run/tls/server/tls.key
+    client_auth_type: RequireAndVerifyClientCert
+    client_ca_file: /var/run/ca/service-ca.crt
+internal_server:
+  enable: true
+  http_listen_address: 0.0.0.0
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          tls:
+            client_ca_file: /var/run/ca/service-ca.crt
+            cert_file: /var/run/tls/server/tls.crt
+            key_file: /var/run/tls/server/tls.key
+            min_version: "1.2"
+            curve_preferences: [X25519MLKEM768, P256, X25519]
+        http:
+          tls:
+            client_ca_file: /var/run/ca/service-ca.crt
+            cert_file: /var/run/tls/server/tls.crt
+            key_file: /var/run/tls/server/tls.key
+            min_version: "1.2"
+            curve_preferences: [X25519MLKEM768, P256, X25519]
+          endpoint: localhost:4318
+usage_report:
+  reporting_enabled: false
+`, string(cfg))
 }

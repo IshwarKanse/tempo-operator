@@ -296,13 +296,9 @@ func configureStorage(opts Options, sts *appsv1.StatefulSet) error {
 			return errors.New("please configure .spec.storage.traces.s3")
 		}
 
-		var region string
-		if opts.StorageParams.S3 != nil {
-			region = opts.StorageParams.S3.Region
-		}
 		err := manifestutils.ConfigureS3Storage(&sts.Spec.Template.Spec,
 			"tempo", tempo.Spec.Storage.Traces.S3.Secret,
-			tempo.Spec.Storage.Traces.S3.TLS, opts.StorageParams.CredentialMode, tempo.Name, opts.StorageParams.CloudCredentials.Environment, region)
+			tempo.Spec.Storage.Traces.S3.TLS, opts.StorageParams.CredentialMode, tempo.Name, opts.StorageParams.CloudCredentials.Environment, opts.StorageParams.S3)
 		if err != nil {
 			return err
 		}
@@ -464,6 +460,15 @@ func configureGateway(opts Options, sts *appsv1.StatefulSet) error {
 			fmt.Sprintf("--traces.tls.ca-file=%s", path.Join(manifestutils.TempoInternalTLSCADir, manifestutils.TLSCAFilename)),
 			"--traces.tls.watch-certs=true",
 		}...)
+		if opts.TLSProfile.MinTLSVersion != "" {
+			args = append(args, fmt.Sprintf("--tls.min-version=%s", opts.TLSProfile.MinTLSVersion))
+		}
+		if opts.TLSProfile.Ciphers != nil {
+			args = append(args, fmt.Sprintf("--tls.cipher-suites=%s", opts.TLSProfile.CipherSuites()))
+		}
+		if opts.TLSProfile.Groups != nil {
+			args = append(args, fmt.Sprintf("--tls.curve-preferences=%s", opts.TLSProfile.CurvePreferencesGateway()))
+		}
 	}
 
 	ports := []corev1.ContainerPort{
@@ -512,13 +517,6 @@ func configureGateway(opts Options, sts *appsv1.StatefulSet) error {
 			"--web.healthchecks.url=https://localhost:8080",
 			"--tls.client-auth-type=NoClientCert",
 		}...)
-
-		if opts.TLSProfile.Ciphers != nil {
-			args = append(args, fmt.Sprintf("--tls.cipher-suites=%s", opts.TLSProfile.CipherSuites()))
-		}
-		if opts.TLSProfile.MinTLSVersion != "" {
-			args = append(args, fmt.Sprintf("--tls.min-version=%s", opts.TLSProfile.MinTLSVersion))
-		}
 	}
 
 	gatewayContainer := corev1.Container{

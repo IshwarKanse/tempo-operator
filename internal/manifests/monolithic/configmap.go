@@ -20,11 +20,12 @@ import (
 )
 
 type tempoReceiverTLSConfig struct {
-	CAFile       string   `yaml:"client_ca_file,omitempty"`
-	CertFile     string   `yaml:"cert_file,omitempty"`
-	KeyFile      string   `yaml:"key_file,omitempty"`
-	MinVersion   string   `yaml:"min_version,omitempty"`
-	CipherSuites []string `yaml:"cipher_suites,omitempty"`
+	CAFile           string   `yaml:"client_ca_file,omitempty"`
+	CertFile         string   `yaml:"cert_file,omitempty"`
+	KeyFile          string   `yaml:"key_file,omitempty"`
+	MinVersion       string   `yaml:"min_version,omitempty"`
+	CipherSuites     []string `yaml:"cipher_suites,omitempty"`
+	CurvePreferences []string `yaml:"curve_preferences,omitempty"`
 }
 
 type tempoReceiverConfig struct {
@@ -39,6 +40,7 @@ type tempoS3Config struct {
 	Endpoint        string `yaml:"endpoint"`
 	Insecure        bool   `yaml:"insecure"`
 	Bucket          string `yaml:"bucket"`
+	Region          string `yaml:"region,omitempty"`
 	TLSCAPath       string `yaml:"tls_ca_path,omitempty"`
 	TLSCertPath     string `yaml:"tls_cert_path,omitempty"`
 	TLSKeyPath      string `yaml:"tls_key_path,omitempty"`
@@ -69,6 +71,7 @@ type tempoConfig struct {
 		HttpServerWriteTimeout time.Duration       `yaml:"http_server_write_timeout,omitempty"`
 		TLSMinVersion          string              `yaml:"tls_min_version,omitempty"`
 		TLSCipherSuites        string              `yaml:"tls_cipher_suites,omitempty"`
+		TLSCurvePreferences    string              `yaml:"tls_curve_preferences,omitempty"`
 		HTTPTLSConfig          *tempoHTTPTLSConfig `yaml:"http_tls_config,omitempty"`
 	} `yaml:"server"`
 
@@ -191,6 +194,7 @@ func configureReceiverTLS(tlsSpec *v1alpha1.TLSSpec, tlsProfile tlsprofile.TLSPr
 			ciphers = tlsSpec.CipherSuites
 		}
 		tlsCfg.CipherSuites = ciphers
+		tlsCfg.CurvePreferences = tlsProfile.CurvePreferencesOTEL()
 	}
 	return tlsCfg
 }
@@ -212,6 +216,9 @@ func buildTempoConfig(opts Options) ([]byte, error) {
 		if opts.CtrlConfig.Gates.HTTPEncryption {
 			config.Server.TLSMinVersion = opts.TLSProfile.MinTLSVersion
 			config.Server.TLSCipherSuites = opts.TLSProfile.CipherSuites()
+			if opts.CtrlConfig.Gates.Tempo.TLSCurvePreferences {
+				config.Server.TLSCurvePreferences = opts.TLSProfile.CurvePreferencesDSKit()
+			}
 			config.Server.HTTPTLSConfig = &tempoHTTPTLSConfig{
 				CertFile:       path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSCertFilename),
 				KeyFile:        path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSKeyFilename),
@@ -267,7 +274,9 @@ func buildTempoConfig(opts Options) ([]byte, error) {
 				}
 			} else if opts.StorageParams.CredentialMode == v1alpha1.CredentialModeToken || opts.StorageParams.CredentialMode == v1alpha1.CredentialModeTokenCCO {
 				config.Storage.Trace.S3.Bucket = opts.StorageParams.S3.Bucket
-				config.Storage.Trace.S3.Endpoint = fmt.Sprintf("s3.%s.amazonaws.com", opts.StorageParams.S3.Region)
+				config.Storage.Trace.S3.Endpoint = opts.StorageParams.S3.Endpoint
+				config.Storage.Trace.S3.Insecure = opts.StorageParams.S3.Insecure
+				config.Storage.Trace.S3.Region = opts.StorageParams.S3.Region
 			}
 
 		case v1alpha1.MonolithicTracesStorageBackendAzure:
@@ -301,11 +310,12 @@ func buildTempoConfig(opts Options) ([]byte, error) {
 				}
 				config.Distributor.Receivers.OTLP.Protocols.GRPC = &tempoReceiverConfig{
 					TLS: tempoReceiverTLSConfig{
-						CertFile:     path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSCertFilename),
-						CAFile:       path.Join(manifestutils.TempoInternalTLSCADir, manifestutils.TLSCAFilename),
-						KeyFile:      path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSKeyFilename),
-						MinVersion:   minVersion,
-						CipherSuites: ciphers,
+						CertFile:         path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSCertFilename),
+						CAFile:           path.Join(manifestutils.TempoInternalTLSCADir, manifestutils.TLSCAFilename),
+						KeyFile:          path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSKeyFilename),
+						MinVersion:       minVersion,
+						CipherSuites:     ciphers,
+						CurvePreferences: opts.TLSProfile.CurvePreferencesOTEL(),
 					},
 				}
 			} else {
@@ -341,11 +351,12 @@ func buildTempoConfig(opts Options) ([]byte, error) {
 				}
 				config.Distributor.Receivers.OTLP.Protocols.HTTP = &tempoReceiverConfig{
 					TLS: tempoReceiverTLSConfig{
-						CertFile:     path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSCertFilename),
-						CAFile:       path.Join(manifestutils.TempoInternalTLSCADir, manifestutils.TLSCAFilename),
-						KeyFile:      path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSKeyFilename),
-						MinVersion:   minVersion,
-						CipherSuites: ciphers,
+						CertFile:         path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSCertFilename),
+						CAFile:           path.Join(manifestutils.TempoInternalTLSCADir, manifestutils.TLSCAFilename),
+						KeyFile:          path.Join(manifestutils.TempoInternalTLSCertDir, manifestutils.TLSKeyFilename),
+						MinVersion:       minVersion,
+						CipherSuites:     ciphers,
+						CurvePreferences: opts.TLSProfile.CurvePreferencesOTEL(),
 					},
 					Endpoint: fmt.Sprintf("localhost:%d", manifestutils.PortOtlpHttp),
 				}

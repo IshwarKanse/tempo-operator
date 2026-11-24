@@ -3,6 +3,121 @@ Changes by Version
 
 <!-- next version -->
 
+## 0.24.0
+
+### 💡 Enhancements 💡
+
+- `tempostack, tempomonolithic`: Support the AWS ISO and ISOB partitions for S3 object storage with short lived credentials (#1109)
+  The S3 endpoint, the STS endpoint and the ARN of the CredentialsRequest are now derived from the
+  AWS partition of the configured region, instead of always assuming the commercial partition.
+  In these credential modes the region of the storage secret is now also rendered as the signing
+  region of the S3 client (`storage.trace.s3.region`) in every partition. This changes the generated
+  configuration of existing instances, which are rolled out once after the upgrade.
+  
+  The storage secret of the `token` and `token-cco` credential modes accepts two new optional fields:
+  
+  * `endpoint` overrides the auto-generated S3 endpoint. It must be an `http://` or `https://` URL
+    without a path, and its scheme selects the transport: an `http://` endpoint configures Tempo to
+    reach S3 over plain HTTP. Previously, these modes always
+    used HTTPS: the field was ignored, and caused a validation error when the credential mode was
+    auto-detected.
+  * `audience` overrides the audience of the projected service account token.
+  
+- `operator`: Apply curve preferences of the TLS profile to the gateway and webhook (#1708)
+- `operator`: Apply curve preferences of the TLS profile to Tempo components (#1709)
+  Curve preferences are always applied to Tempo receivers and the gateway.
+  To apply them to Tempo HTTP/gRPC servers, enable the `tempo.tlsCurvePreferences`
+  feature gate (this requires a patched Tempo image).
+  
+
+### 🧰 Bug fixes 🧰
+
+- `must-gather`: Fix must-gather crashing when collecting ServiceMonitor or PodMonitor resources. (#1717)
+- `tempostack, tempomonolithic`: Require permission to create pods when setting custom container images, a custom ServiceAccount or environment variables in TempoStack or TempoMonolithic. (#1719)
+  Previously, a user with permission to create a TempoStack or TempoMonolithic, but without permission to create pods,
+  could use `spec.images`, `spec.serviceAccount`, `spec.env` or `spec.envFrom` to make the operator run pods with arbitrary
+  container images or ServiceAccounts, or expose arbitrary Secrets of the namespace to the Tempo pods.
+  The validating webhooks now verify that the user creating or updating the CR has permission to create pods
+  in its namespace whenever these fields are set.
+  
+  Reported by user melaluca via Grafana Labs's intigriti.com portal.
+  
+
+### Components
+- Tempo: [v2.10.10](https://github.com/grafana/tempo/releases/tag/v2.10.10)
+
+### Support
+This release supports Kubernetes 1.25 to 1.37.
+
+## 0.23.1
+
+### 💡 Enhancements 💡
+
+- `operator`: Upgrade Go to 1.26.10 (#1691)
+- `tempostack, tempomonolithic`: Update Tempo to 2.10.10 (#1689)
+
+### Components
+- Tempo: [v2.10.10](https://github.com/grafana/tempo/releases/tag/v2.10.10)
+
+### Support
+This release supports Kubernetes 1.25 to 1.36.
+
+## 0.23.0
+
+### 💡 Enhancements 💡
+
+- `tempostack, tempomonolithic`: Update the gateway image to main-2026-10-13-d17ce87 and the opa-openshift image to main-2026-09-22-cc6817a. (#1672)
+- `operator`: Update Kubernetes dependencies to 1.37 (#1675)
+- `tempostack, tempomonolithic`: Roll out pods when the storage secret changes (#1655)
+- `tempostack`: Support overriding the pod anti affinity of a TempoStack component via the new spec.template.<component>.podAntiAffinity field (#1662)
+  By default the pods of a component only *prefer* to be scheduled onto different nodes and failure
+  domains, which the scheduler may ignore. This is true of zone-aware stacks as well: topology
+  spread constraints balance the pods across zones, but inside a zone several replicas of a
+  component can still land on the same node.
+  
+  A stack that needs a hard guarantee now sets its own anti affinity, per component:
+  
+  ```yaml
+  spec:
+    template:
+      ingester:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: ingester
+                app.kubernetes.io/instance: sample
+            topologyKey: kubernetes.io/hostname
+  ```
+  
+  The field replaces the default anti affinity of that component rather than adding to it. Note
+  that a required term leaves the surplus pods `Pending` when a component has more replicas than
+  schedulable nodes.
+  
+  The behavior follows the Grafana Loki Operator, which exposes the same field per component.
+  
+
+### 🧰 Bug fixes 🧰
+
+- `tempostack`: Fix invalid `components.metricsGenerator` status field (#1642)
+  Fixes the "The field components.metricsGenerator is invalid." error in the OpenShift console.
+- `tempostack, tempomonolithic`: Roll out pods when the Cloud Credential Operator rotates the managed credentials secret (#1650)
+- `gateway`: Bind opa-openshift endpoint to localhost (#1673)
+- `tempostack`: For S3 static credentials, derive the HTTP/HTTPS transport from the storage secret endpoint scheme instead of the storage TLS toggle (#1649)
+  An `https://` endpoint now connects over HTTPS even when `spec.storage.tls.enabled` is false.
+  
+- `tempostack`: Use the configured gateway ingress host in OpenShift tenant redirect URLs. (#1629)
+  When spec.template.gateway.ingress.host is set, the OpenShift Route already uses that
+  hostname. Tenant redirectURL values in tenants.yaml now use the same host instead of
+  the generated default Route hostname.
+  
+
+### Components
+- Tempo: [v2.10.8](https://github.com/grafana/tempo/releases/tag/v2.10.8)
+
+### Support
+This release supports Kubernetes 1.25 to 1.36.
+
 ## 0.22.0
 
 ### 🚩 Deprecations 🚩

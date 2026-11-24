@@ -100,7 +100,10 @@ func mergeOptionsFromFile(o manager.Options, cfg *configv1alpha1.ProjectConfig) 
 
 		// Convert TLS profile spec to TLS config function
 		var unsupportedCiphers []string
-		tlsOpts, unsupportedCiphers = openshifttls.NewTLSConfigFromProfile(tlsProfileSpec)
+		tlsOpts, unsupportedCiphers, err = openshifttls.NewTLSConfigFromProfile(tlsProfileSpec)
+		if err != nil {
+			return o, tlsProfileSpec, fmt.Errorf("failed to create TLS config from cluster profile: %w", err)
+		}
 		if len(unsupportedCiphers) > 0 {
 			ctrl.Log.WithName("setup").Info("Some ciphers from TLS profile are not supported by Go runtime",
 				"unsupportedCiphers", unsupportedCiphers)
@@ -116,10 +119,14 @@ func mergeOptionsFromFile(o manager.Options, cfg *configv1alpha1.ProjectConfig) 
 		tlsProfileSpec = configv1.TLSProfileSpec{
 			Ciphers:       tlsProfileOpts.Ciphers,
 			MinTLSVersion: configv1.TLSProtocolVersion(tlsProfileOpts.MinTLSVersion),
+			Groups:        tlsprofile.StringsToTLSGroups(tlsProfileOpts.Groups),
 		}
 
 		// Create TLS config function using the library with the converted spec
-		tlsOpts, _ = openshifttls.NewTLSConfigFromProfile(tlsProfileSpec)
+		tlsOpts, _, err = openshifttls.NewTLSConfigFromProfile(tlsProfileSpec)
+		if err != nil {
+			return o, tlsProfileSpec, fmt.Errorf("failed to create TLS config from profile: %w", err)
+		}
 	}
 
 	o.Metrics.SecureServing = cfg.Metrics.Secure
